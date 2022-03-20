@@ -198,6 +198,7 @@ class DetectionResultFields(object):
   raw_detection_boxes = 'raw_detection_boxes'
   raw_detection_scores = 'raw_detection_scores'
   detection_anchor_indices = 'detection_anchor_indices'
+  img_classification = 'img_classification'
 
 
 class BoxListFields(object):

@@ -234,8 +234,10 @@ def transform_input_data(tensor_dict,
       (verified_neg_classes_field, False),
       (not_exhaustive_field, False)]:
     if field in out_tensor_dict:
+      # Remove if key is greater
       out_tensor_dict[field] = _remove_unrecognized_classes(
           out_tensor_dict[field], unrecognized_label=-1)
+      # Convert to K-hot - Custom num_classes to avoid unequal
       out_tensor_dict[field] = convert_labeled_classes_to_k_hot(
           out_tensor_dict[field], num_classes, map_empty_to_ones)
 

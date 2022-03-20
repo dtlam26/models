@@ -490,6 +490,8 @@ class DetectionModel(six.with_metaclass(abc.ABCMeta, _BaseClass)):
     if training_step is not None:
       self._training_step = training_step
 
+
+
   @abc.abstractmethod
   def regularization_losses(self):
     """Returns a list of regularization losses for this model.

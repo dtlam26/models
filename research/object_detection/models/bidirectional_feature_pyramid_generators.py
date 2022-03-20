@@ -484,3 +484,153 @@ class KerasBiFpnFeatureMaps(tf.keras.Model):
 
     return collections.OrderedDict(
         zip(self.bifpn_output_node_names, output_feature_maps))
+
+class KerasBiFpnFeatureMaps_with_classification(tf.keras.Model):
+  """Generates Keras based BiFPN feature maps from an input feature map pyramid.
+
+  A Keras model that generates multi-scale feature maps for detection by
+  iteratively computing top-down and bottom-up feature pyramids, as in the
+  EfficientDet paper by Tan et al, see arxiv.org/abs/1911.09070 for details.
+  """
+
+  def __init__(self,
+               bifpn_num_iterations,
+               bifpn_num_filters,
+               fpn_min_level,
+               fpn_max_level,
+               input_max_level,
+               is_training,
+               conv_hyperparams,
+               freeze_batchnorm,
+               bifpn_node_params=None,
+               name=None):
+    """Constructor.
+
+    Args:
+      bifpn_num_iterations: The number of top-down bottom-up iterations.
+      bifpn_num_filters: The number of filters (channels) to be used for all
+        feature maps in this BiFPN.
+      fpn_min_level: The minimum pyramid level (highest feature map resolution)
+        to use in the BiFPN.
+      fpn_max_level: The maximum pyramid level (lowest feature map resolution)
+        to use in the BiFPN.
+      input_max_level: The maximum pyramid level that will be provided as input
+        to the BiFPN. Accordingly, the BiFPN will compute any additional pyramid
+        levels from input_max_level up to the desired fpn_max_level, with each
+        successivel level downsampling by a scale factor of 2 by default.
+      is_training: Indicates whether the feature generator is in training mode.
+      conv_hyperparams: A `hyperparams_builder.KerasLayerHyperparams` object
+        containing hyperparameters for convolution ops.
+      freeze_batchnorm: Bool. Whether to freeze batch norm parameters during
+        training or not. When training with a small batch size (e.g. 1), it is
+        desirable to freeze batch norm update and use pretrained batch norm
+        params.
+      bifpn_node_params: An optional dictionary that may be used to specify
+        default parameters for BiFPN nodes, without the need to provide a custom
+        bifpn_node_config. For example, if '{ combine_method: 'sum' }', then all
+        BiFPN nodes will combine input feature maps by summation, rather than
+        by the default fast attention method.
+      name: A string name scope to assign to the model. If 'None', Keras
+        will auto-generate one from the class name.
+    """
+    super(KerasBiFpnFeatureMaps, self).__init__(name=name)
+    bifpn_node_config = _create_bifpn_node_config(
+        bifpn_num_iterations, bifpn_num_filters, fpn_min_level, fpn_max_level,
+        input_max_level, bifpn_node_params)
+    bifpn_input_config = _create_bifpn_input_config(
+        fpn_min_level, fpn_max_level, input_max_level)
+    bifpn_output_node_names = _get_bifpn_output_node_names(
+        fpn_min_level, fpn_max_level, bifpn_node_config)
+
+    self.bifpn_node_config = bifpn_node_config
+    self.bifpn_output_node_names = bifpn_output_node_names
+    self.bifpn_output_node_names.append('classification')
+    self.node_input_blocks = []
+    self.node_combine_op = []
+    self.node_post_combine_block = []
+
+    all_node_params = bifpn_input_config
+    all_node_names = [node['name'] for node in all_node_params]
+    for node_config in bifpn_node_config:
+      # Maybe transform and/or resample input feature maps.
+      input_blocks = []
+      for input_name in node_config['inputs']:
+        if input_name not in all_node_names:
+          raise ValueError(
+              'Input feature map ({}) does not exist:'.format(input_name))
+        input_index = all_node_names.index(input_name)
+        input_params = all_node_params[input_index]
+        input_block = node_config['input_op'](
+            name='{}/input_{}/'.format(node_config['name'], input_name),
+            input_scale=input_params['scale'],
+            input_num_channels=input_params.get('num_channels', None),
+            output_scale=node_config['scale'],
+            output_num_channels=node_config['num_channels'],
+            conv_hyperparams=conv_hyperparams,
+            is_training=is_training,
+            freeze_batchnorm=freeze_batchnorm)
+        input_blocks.append((input_index, input_block))
+
+      # Combine input feature maps.
+      combine_op = _create_bifpn_combine_op(
+          num_inputs=len(input_blocks),
+          name=(node_config['name'] + '/combine'),
+          combine_method=node_config['combine_method'])
+
+      # Post-combine layers.
+      post_combine_block = []
+      if node_config['post_combine_op']:
+        post_combine_block.extend(node_config['post_combine_op'](
+            name=node_config['name'] + '/post_combine/',
+            conv_hyperparams=conv_hyperparams,
+            is_training=is_training,
+            freeze_batchnorm=freeze_batchnorm))
+
+      self.node_input_blocks.append(input_blocks)
+      self.node_combine_op.append(combine_op)
+      self.node_post_combine_block.append(post_combine_block)
+      all_node_params.append(node_config)
+      all_node_names.append(node_config['name'])
+
+  def call(self, feature_pyramid):
+    """Compute BiFPN feature maps from input feature pyramid.
+
+    Executed when calling the `.__call__` method on input.
+
+    Args:
+      feature_pyramid: list of tuples of (tensor_name, image_feature_tensor).
+
+    Returns:
+      feature_maps: an OrderedDict mapping keys (feature map names) to
+        tensors where each tensor has shape [batch, height_i, width_i, depth_i].
+    """
+    feature_maps = [el[1] for el in feature_pyramid][:-1]
+    output_feature_maps = [None for node in self.bifpn_output_node_names]
+    output_feature_maps[-1] = feature_maps[-1]
+    
+    for index, node in enumerate(self.bifpn_node_config):
+      node_scope = 'node_{:02d}'.format(index)
+      with tf.name_scope(node_scope):
+        # Apply layer blocks to this node's input feature maps.
+        input_block_results = []
+        for input_index, input_block in self.node_input_blocks[index]:
+          block_result = feature_maps[input_index]
+          for layer in input_block:
+            block_result = layer(block_result)
+          input_block_results.append(block_result)
+
+        # Combine the resulting feature maps.
+        node_result = self.node_combine_op[index](input_block_results)
+
+        # Apply post-combine layer block if applicable.
+        for layer in self.node_post_combine_block[index]:
+          node_result = layer(node_result)
+
+        feature_maps.append(node_result)
+
+        if node['name'] in self.bifpn_output_node_names:
+          index = self.bifpn_output_node_names.index(node['name'])
+          output_feature_maps[index] = node_result
+
+    return collections.OrderedDict(
+        zip(self.bifpn_output_node_names, output_feature_maps))

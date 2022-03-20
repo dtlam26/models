@@ -145,6 +145,7 @@ class SSDFeatureExtractor(object):
 
     return variables_to_restore
 
+#only support classification for TF2 with Keras
 
 class SSDKerasFeatureExtractor(tf.keras.Model):
   """SSD Feature Extractor definition."""
@@ -192,7 +193,7 @@ class SSDKerasFeatureExtractor(tf.keras.Model):
         will auto-generate one from the class name.
     """
     super(SSDKerasFeatureExtractor, self).__init__(name=name)
-
+    self._use_image_classification = False
     self._is_training = is_training
     self._depth_multiplier = depth_multiplier
     self._min_depth = min_depth
@@ -410,6 +411,7 @@ class SSDMetaArch(model.DetectionModel):
         background_class + num_foreground_classes * [0], tf.float32)
 
     self._target_assigner = target_assigner_instance
+    self._image_classification_loss = tf.keras.metrics.categorical_crossentropy
 
     self._classification_loss = classification_loss
     self._localization_loss = localization_loss
@@ -568,6 +570,9 @@ class SSDMetaArch(model.DetectionModel):
       batchnorm_updates_collections = tf.GraphKeys.UPDATE_OPS
     if self._feature_extractor.is_keras_model:
       feature_maps = self._feature_extractor(preprocessed_inputs)
+      if self._feature_extractor._use_image_classification:
+          feature_maps = feature_maps[:-1]
+          img_classification = feature_maps[-1]
     else:
       with slim.arg_scope([slim.batch_norm],
                           is_training=(self._is_training and
@@ -618,6 +623,8 @@ class SSDMetaArch(model.DetectionModel):
           predictions_dict['box_encodings'], boxlist_list))
     self._batched_prediction_tensor_names = [x for x in predictions_dict
                                              if x != 'anchors']
+    if self._feature_extractor._use_image_classification:
+        predictions_dict.update({'img_classification':img_classification})
     return predictions_dict
 
   def _raw_detections_and_feature_map_inds(self, box_encodings, boxlist_list):
@@ -713,6 +720,10 @@ class SSDMetaArch(model.DetectionModel):
       raise ValueError('prediction_dict does not contain expected entries.')
     if 'anchors' not in prediction_dict:
       prediction_dict['anchors'] = self.anchors.get()
+    if 'img_classification' in prediction_dict:
+      img_classification = prediction_dict['img_classification']
+    else:
+      img_classification = None
     with tf.name_scope('Postprocessor'):
       preprocessed_images = prediction_dict['preprocessed_inputs']
       box_encodings = prediction_dict['box_encodings']
@@ -783,6 +794,8 @@ class SSDMetaArch(model.DetectionModel):
           fields.DetectionResultFields.raw_detection_scores:
               detection_scores_with_background
       }
+      if img_classification is not None:
+        detection_dict[fields.DetectionResultFields] = img_classification
       if (nmsed_additional_fields is not None and
           fields.InputDataFields.multiclass_scores in nmsed_additional_fields):
         detection_dict[
@@ -869,6 +882,14 @@ class SSDMetaArch(model.DetectionModel):
       if self.groundtruth_has_field(fields.InputDataFields.is_annotated):
         losses_mask = tf.stack(self.groundtruth_lists(
             fields.InputDataFields.is_annotated))
+      if self.groundtruth_has_field(fields.InputDataFields.groundtruth_labeled_classes):
+        img_classification_gt = self.groundtruth_lists(fields.InputDataFields.groundtruth_labeled_classes)
+        img_classification_losses = self._image_classification_loss(
+                prediction_dict['img_classification'],
+                img_classification_gt,
+            )
+      else:
+        img_classification_losses = None
 
 
       location_losses = self._localization_loss(
@@ -955,6 +976,9 @@ class SSDMetaArch(model.DetectionModel):
           'Loss/localization_loss': localization_loss,
           'Loss/classification_loss': classification_loss
       }
+      if img_classification_losses is not None:
+        loss_dict.update({'Loss/img_classification_loss':
+                tf.reduce_sum(img_classification_losses)})
 
 
     return loss_dict
@@ -1002,7 +1026,8 @@ class SSDMetaArch(model.DetectionModel):
                       groundtruth_classes_list,
                       groundtruth_keypoints_list=None,
                       groundtruth_weights_list=None,
-                      groundtruth_confidences_list=None):
+                      groundtruth_confidences_list=None,
+                      groundtruth_image_classes=None):
     """Assign groundtruth targets.
 
     Adds a background class to each one-hot encoding of groundtruth classes
@@ -1041,11 +1066,13 @@ class SSDMetaArch(model.DetectionModel):
         (3) if match[x, i]=-2, anchor i is ignored since it is not background
             and does not have sufficient overlap to call it a foreground.
     """
+
     groundtruth_boxlists = [
         box_list.BoxList(boxes) for boxes in groundtruth_boxes_list
     ]
     train_using_confidences = (self._is_training and
                                self._use_confidences_as_targets)
+
     if self._add_background_class:
       groundtruth_classes_with_background_list = [
           tf.pad(one_hot_encoding, [[0, 0], [1, 0]], mode='CONSTANT')

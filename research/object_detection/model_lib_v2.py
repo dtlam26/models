@@ -550,7 +550,7 @@ def train_loop(
 
     def train_dataset_fn(input_context):
       """Callable to create train input."""
-      # Create the inputs.
+      # Create the inputs. the AKA dataset
       train_input = inputs.train_input(
           train_config=train_config,
           train_input_config=train_input_config,
