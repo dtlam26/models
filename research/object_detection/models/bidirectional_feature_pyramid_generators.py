@@ -533,7 +533,7 @@ class KerasBiFpnFeatureMaps_with_classification(tf.keras.Model):
       name: A string name scope to assign to the model. If 'None', Keras
         will auto-generate one from the class name.
     """
-    super(KerasBiFpnFeatureMaps, self).__init__(name=name)
+    super(KerasBiFpnFeatureMaps_with_classification, self).__init__(name=name)
     bifpn_node_config = _create_bifpn_node_config(
         bifpn_num_iterations, bifpn_num_filters, fpn_min_level, fpn_max_level,
         input_max_level, bifpn_node_params)
@@ -604,10 +604,11 @@ class KerasBiFpnFeatureMaps_with_classification(tf.keras.Model):
       feature_maps: an OrderedDict mapping keys (feature map names) to
         tensors where each tensor has shape [batch, height_i, width_i, depth_i].
     """
-    feature_maps = [el[1] for el in feature_pyramid][:-1]
+    feature_maps = [el[1] for el in feature_pyramid]
+
     output_feature_maps = [None for node in self.bifpn_output_node_names]
     output_feature_maps[-1] = feature_maps[-1]
-    
+    feature_maps = feature_maps[:-1]
     for index, node in enumerate(self.bifpn_node_config):
       node_scope = 'node_{:02d}'.format(index)
       with tf.name_scope(node_scope):
@@ -630,7 +631,9 @@ class KerasBiFpnFeatureMaps_with_classification(tf.keras.Model):
 
         if node['name'] in self.bifpn_output_node_names:
           index = self.bifpn_output_node_names.index(node['name'])
-          output_feature_maps[index] = node_result
 
-    return collections.OrderedDict(
+          output_feature_maps[index] = node_result
+    col = collections.OrderedDict(
         zip(self.bifpn_output_node_names, output_feature_maps))
+    print("Features layers: ", col)
+    return col

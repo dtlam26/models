@@ -14,6 +14,12 @@ Contributions to the codebase are welcome and we would love to hear back from
 you if you find this API useful. Finally if you use the TensorFlow Object
 Detection API for a research publication, please consider citing:
 
+***
+1/ For using with classification: please change the number of output classes to some specific number of classes at `242` and `500` in `inputs.py`. Default will be the number of classes in detections.
+
+2/ Currently Modification only supports SSD
+***
+
 ```
 "Speed/accuracy trade-offs for modern convolutional object detectors."
 Huang J, Rathod V, Sun C, Zhu M, Korattikara A, Fathi A, Fischer I, Wojna Z,

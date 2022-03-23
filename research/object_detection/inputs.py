@@ -238,8 +238,11 @@ def transform_input_data(tensor_dict,
       out_tensor_dict[field] = _remove_unrecognized_classes(
           out_tensor_dict[field], unrecognized_label=-1)
       # Convert to K-hot - Custom num_classes to avoid unequal
+      # k_hot = num_classes
+      k_hot = 3
       out_tensor_dict[field] = convert_labeled_classes_to_k_hot(
-          out_tensor_dict[field], num_classes, map_empty_to_ones)
+          out_tensor_dict[field], k_hot, map_empty_to_ones)
+      print("output_tensor:", field, out_tensor_dict[field])
 
   if input_fields.multiclass_scores in out_tensor_dict:
     out_tensor_dict[
@@ -493,7 +496,8 @@ def pad_input_data_to_static_shapes(tensor_dict,
       input_fields.groundtruth_label_types: [max_num_boxes],
       input_fields.groundtruth_label_weights: [max_num_boxes],
       input_fields.true_image_shape: [3],
-      input_fields.groundtruth_image_classes: [num_classes],
+      # input_fields.groundtruth_image_classes: [num_classes],
+      input_fields.groundtruth_image_classes: [3],
       input_fields.groundtruth_image_confidences: [num_classes],
       input_fields.groundtruth_labeled_classes: [num_classes],
   }

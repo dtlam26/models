@@ -68,6 +68,7 @@ if tf_version.is_tf2():
   from object_detection.predictors import rfcn_keras_box_predictor
   if sys.version_info[0] >= 3:
     from object_detection.models import ssd_efficientnet_bifpn_feature_extractor as ssd_efficientnet_bifpn
+    from object_detection.models import ssd_efficientnet_bifpn_feature_extractor_with_classification_branch as ssd_efficientnet_bifpn_with_classification
 
 if tf_version.is_tf1():
   from object_detection.models import faster_rcnn_inception_resnet_v2_feature_extractor as frcnn_inc_res
@@ -126,6 +127,22 @@ if tf_version.is_tf2():
           ssd_efficientnet_bifpn.SSDEfficientNetB6BiFPNKerasFeatureExtractor,
       'ssd_efficientnet-b7_bifpn_keras':
           ssd_efficientnet_bifpn.SSDEfficientNetB7BiFPNKerasFeatureExtractor,
+      'ssd_efficientnet-b0_bifpn_keras_with_classification':
+          ssd_efficientnet_bifpn_with_classification.SSDEfficientNetB0BiFPNKerasFeatureExtractor,
+      'ssd_efficientnet-b1_bifpn_keras_with_classification':
+          ssd_efficientnet_bifpn_with_classification.SSDEfficientNetB1BiFPNKerasFeatureExtractor,
+      'ssd_efficientnet-b2_bifpn_keras_with_classification':
+          ssd_efficientnet_bifpn_with_classification.SSDEfficientNetB2BiFPNKerasFeatureExtractor,
+      'ssd_efficientnet-b3_bifpn_keras_with_classification':
+          ssd_efficientnet_bifpn_with_classification.SSDEfficientNetB3BiFPNKerasFeatureExtractor,
+      'ssd_efficientnet-b4_bifpn_keras_with_classification':
+          ssd_efficientnet_bifpn_with_classification.SSDEfficientNetB4BiFPNKerasFeatureExtractor,
+      'ssd_efficientnet-b5_bifpn_keras_with_classification':
+          ssd_efficientnet_bifpn_with_classification.SSDEfficientNetB5BiFPNKerasFeatureExtractor,
+      'ssd_efficientnet-b6_bifpn_keras_with_classification':
+          ssd_efficientnet_bifpn_with_classification.SSDEfficientNetB6BiFPNKerasFeatureExtractor,
+      'ssd_efficientnet-b7_bifpn_keras_with_classification':
+          ssd_efficientnet_bifpn_with_classification.SSDEfficientNetB7BiFPNKerasFeatureExtractor,
   }
 
   FASTER_RCNN_KERAS_FEATURE_EXTRACTOR_CLASS_MAP = {

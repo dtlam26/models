@@ -571,8 +571,8 @@ class SSDMetaArch(model.DetectionModel):
     if self._feature_extractor.is_keras_model:
       feature_maps = self._feature_extractor(preprocessed_inputs)
       if self._feature_extractor._use_image_classification:
-          feature_maps = feature_maps[:-1]
           img_classification = feature_maps[-1]
+          feature_maps = feature_maps[:-1]
     else:
       with slim.arg_scope([slim.batch_norm],
                           is_training=(self._is_training and
@@ -795,7 +795,7 @@ class SSDMetaArch(model.DetectionModel):
               detection_scores_with_background
       }
       if img_classification is not None:
-        detection_dict[fields.DetectionResultFields] = img_classification
+        detection_dict[fields.DetectionResultFields.img_classification] = img_classification
       if (nmsed_additional_fields is not None and
           fields.InputDataFields.multiclass_scores in nmsed_additional_fields):
         detection_dict[
@@ -882,12 +882,14 @@ class SSDMetaArch(model.DetectionModel):
       if self.groundtruth_has_field(fields.InputDataFields.is_annotated):
         losses_mask = tf.stack(self.groundtruth_lists(
             fields.InputDataFields.is_annotated))
-      if self.groundtruth_has_field(fields.InputDataFields.groundtruth_labeled_classes):
-        img_classification_gt = self.groundtruth_lists(fields.InputDataFields.groundtruth_labeled_classes)
+      if self.groundtruth_has_field(fields.InputDataFields.groundtruth_image_classes):
+        img_classification_gt = self.groundtruth_lists(fields.InputDataFields.groundtruth_image_classes)
+        
         img_classification_losses = self._image_classification_loss(
                 prediction_dict['img_classification'],
                 img_classification_gt,
             )
+
       else:
         img_classification_losses = None
 

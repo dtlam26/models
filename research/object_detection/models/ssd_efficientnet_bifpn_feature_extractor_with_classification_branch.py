@@ -164,7 +164,7 @@ class SSDEfficientNetBiFPNKerasFeatureExtractor_with_classification(
     #overrid method manually
 
     efficientnet_overrides = {'rescale_input': False, 'num_classes': 3}
-    
+
     if override_base_feature_extractor_hyperparams:
       efficientnet_overrides[
           'weight_decay'] = conv_hyperparams.get_regularizer_weight()
@@ -179,13 +179,15 @@ class SSDEfficientNetBiFPNKerasFeatureExtractor_with_classification(
     # attach classification branch for image
     self._output_layer_names.append('probs')
     self._output_layer_alias.append('classification')
+    # print("Backbone Layers")
+    # print(efficientnet_base.summary())
 
     outputs = [efficientnet_base.get_layer(output_layer_name).output
                for output_layer_name in self._output_layer_names]
-
     # model now will output feature_map with classification branch at the end
     self._efficientnet = tf.keras.Model(
         inputs=efficientnet_base.inputs, outputs=outputs)
+
     self.classification_backbone = efficientnet_base
     self._bifpn_stage = None
 
@@ -200,7 +202,7 @@ class SSDEfficientNetBiFPNKerasFeatureExtractor_with_classification(
         conv_hyperparams=self._conv_hyperparams,
         freeze_batchnorm=self._freeze_batchnorm,
         bifpn_node_params=self._bifpn_node_params,
-        name='bifpn')
+        name='bifpn_w_cls')
     self.built = True
 
   def preprocess(self, inputs):
@@ -240,7 +242,7 @@ class SSDEfficientNetBiFPNKerasFeatureExtractor_with_classification(
 
     base_feature_maps = self._efficientnet(
         ops.pad_to_multiple(preprocessed_inputs, self._pad_to_multiple))
-
+    
     output_feature_map_dict = self._bifpn_stage(
         list(zip(self._output_layer_alias, base_feature_maps)))
 
